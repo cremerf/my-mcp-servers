@@ -1,0 +1,16 @@
+# These owners will be the default owners for everything in the repo
+* @cremerf
+
+# Server source code
+/src/ @cremerf
+
+# Workflow files
+/.github/workflows/ @cremerf
+
+# Security-related files
+/SECURITY.md @cremerf
+/.github/codeql/ @cremerf
+
+# Package files
+package.json @cremerf
+package-lock.json @cremerf 
