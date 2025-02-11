@@ -1,6 +1,7 @@
 <!-- Provide a brief description of your changes -->
 
 ## Description
+<!-- Describe your changes in detail -->
 
 ## Server Details
 <!-- If modifying an existing server, provide details -->
@@ -11,7 +12,7 @@
 <!-- Why is this change needed? What problem does it solve? -->
 
 ## How Has This Been Tested?
-<!-- Have you tested this with an LLM client? Which scenarios were tested? -->
+<!-- Please describe the tests that you ran to verify your changes -->
 
 ## Breaking Changes
 <!-- Will users need to update their MCP client configurations? -->
@@ -20,7 +21,7 @@
 <!-- What types of changes does your code introduce? Put an `x` in all the boxes that apply: -->
 - [ ] Bug fix (non-breaking change which fixes an issue)
 - [ ] New feature (non-breaking change which adds functionality)
-- [ ] Breaking change (fix or feature that would cause existing functionality to change)
+- [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
 - [ ] Documentation update
 
 ## Checklist
@@ -36,3 +37,11 @@
 
 ## Additional context
 <!-- Add any other context, implementation notes, or design decisions -->
+
+## Security Considerations:
+- [ ] I have reviewed the [Security Policy](../SECURITY.md)
+- [ ] This change introduces no new security risks
+- [ ] I have updated security documentation if necessary
+
+## Additional Notes:
+<!-- Add any additional notes about the PR here -->

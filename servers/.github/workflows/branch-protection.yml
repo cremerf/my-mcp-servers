@@ -1,0 +1,73 @@
+name: Branch Protection Rules
+
+on:
+  pull_request:
+    branches: [ "main" ]
+  push:
+    branches: [ "main" ]
+
+jobs:
+  enforce-protection:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Check commit signature (optional)
+        continue-on-error: true
+        run: |
+          if [ "${{ github.event_name }}" = "push" ] && [ "${{ vars.REQUIRE_SIGNED_COMMITS }}" = "true" ]; then
+            git verify-commit ${{ github.sha }} || {
+              echo "Warning: Unsigned commit detected. Consider setting up GPG signing for better security."
+              exit 1
+            }
+          fi
+
+      - name: Require review
+        if: github.event_name == 'pull_request'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          reviews=$(gh pr view ${{ github.event.pull_request.number }} --json reviews -q '.reviews[].state')
+          approved=$(echo "$reviews" | grep -c "APPROVED" || true)
+          changes_requested=$(echo "$reviews" | grep -c "CHANGES_REQUESTED" || true)
+          
+          if [ "$changes_requested" -gt 0 ]; then
+            echo "Error: Changes have been requested. Please address them before merging."
+            exit 1
+          fi
+          
+          if [ "$approved" -lt 1 ]; then
+            echo "Error: Pull request requires at least one approval"
+            exit 1
+          fi
+
+      - name: Check status checks
+        if: github.event_name == 'pull_request'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          statuses=$(gh pr view ${{ github.event.pull_request.number }} --json statusCheckRollup -q '.statusCheckRollup[].state')
+          if [[ $statuses =~ "FAILURE" ]]; then
+            echo "Error: All status checks must pass before merging"
+            echo "Failed checks found in: $statuses"
+            exit 1
+          fi
+          
+          if [[ $statuses =~ "PENDING" ]]; then
+            echo "Error: All status checks must complete before merging"
+            echo "Pending checks found in: $statuses"
+            exit 1
+          fi
+
+      - name: Check branch is up to date
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch origin main
+          behind_commits=$(git rev-list --count HEAD..origin/main)
+          if [ "$behind_commits" -gt 0 ]; then
+            echo "Error: Branch is $behind_commits commits behind main. Please update your branch."
+            exit 1
+          fi 
