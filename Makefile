@@ -1,0 +1,272 @@
+.PHONY: all phase1 phase2 check-os check-permissions verify-versions verify-installation update-all update-git update-brave update-github update-memory update-sequential install-base install-deps install-git install-brave install-github install-memory install-sequential clean clean-deep
+
+# Colors for terminal output
+YELLOW := \033[1;33m
+GREEN := \033[1;32m
+RED := \033[1;31m
+BLUE := \033[1;34m
+NC := \033[0m # No Color
+
+# OS detection
+UNAME_S := $(shell uname -s)
+
+# Required versions
+NODE_VERSION := 18.0.0
+PYTHON_VERSION := 3.10.0
+PYENV_VERSION := 2.3.35
+NVM_VERSION := 0.39.0
+UV_VERSION := 0.1.23
+
+# Base paths
+REPO_ROOT := $(shell pwd)
+SERVERS_DIR := $(REPO_ROOT)/servers/src
+BACKUP_DIR := $(REPO_ROOT)/.backup
+
+all:
+	@echo "$(YELLOW)This installation requires two phases:$(NC)"
+	@echo "1. First run: $(GREEN)make phase1$(NC)"
+	@echo "2. Restart your terminal"
+	@echo "3. Then run: $(GREEN)make phase2$(NC)"
+	@exit 0
+
+check-permissions:
+	@echo "$(BLUE)Checking permissions...$(NC)"
+	@if [ ! -w "$(REPO_ROOT)" ]; then \
+		echo "$(RED)Error: No write permission in repository directory$(NC)"; \
+		exit 1; \
+	fi
+	@if [ ! -w "$(SERVERS_DIR)" ]; then \
+		echo "$(RED)Error: No write permission in servers directory$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(GREEN)✓ Permissions OK$(NC)"
+
+verify-versions:
+	@echo "$(BLUE)Verifying installed versions...$(NC)"
+	@if ! python3 -c "import sys; exit(0 if sys.version_info >= (3,10) else 1)" 2>/dev/null; then \
+		echo "$(RED)Error: Python 3.10+ required$(NC)"; \
+		exit 1; \
+	fi
+	@if ! node -v | grep -q "v18" 2>/dev/null; then \
+		echo "$(RED)Error: Node.js 18+ required$(NC)"; \
+		exit 1; \
+	fi
+	@if command -v pyenv >/dev/null 2>&1; then \
+		if ! pyenv --version | grep -q "$(PYENV_VERSION)" 2>/dev/null; then \
+			echo "$(YELLOW)Warning: pyenv $(PYENV_VERSION) recommended$(NC)"; \
+		fi \
+	fi
+	@if [ -f "$$HOME/.nvm/nvm.sh" ]; then \
+		if ! grep -q "$(NVM_VERSION)" "$$HOME/.nvm/nvm.sh" 2>/dev/null; then \
+			echo "$(YELLOW)Warning: nvm $(NVM_VERSION) recommended$(NC)"; \
+		fi \
+	fi
+	@echo "$(GREEN)✓ Versions OK$(NC)"
+
+check-os:
+	@echo "$(BLUE)Detecting operating system...$(NC)"
+ifeq ($(UNAME_S),Darwin)
+	@echo "$(GREEN)✓ macOS detected$(NC)"
+	@if ! command -v brew >/dev/null 2>&1; then \
+		echo "$(RED)Error: Homebrew is required for macOS$(NC)"; \
+		echo "Install from https://brew.sh"; \
+		exit 1; \
+	fi
+else ifeq ($(UNAME_S),Linux)
+	@echo "$(GREEN)✓ Linux detected$(NC)"
+	@if ! command -v apt-get >/dev/null 2>&1; then \
+		echo "$(RED)Error: apt-get is required for Linux$(NC)"; \
+		exit 1; \
+	fi
+else
+	@echo "$(RED)Unsupported operating system: $(UNAME_S)$(NC)"
+	@exit 1
+endif
+
+backup-env:
+	@echo "$(BLUE)Creating backup of current environment...$(NC)"
+	@mkdir -p $(BACKUP_DIR)
+	@if [ -d "$$HOME/.pyenv" ]; then \
+		tar czf $(BACKUP_DIR)/pyenv_backup.tar.gz -C $$HOME .pyenv; \
+	fi
+	@if [ -d "$$HOME/.nvm" ]; then \
+		tar czf $(BACKUP_DIR)/nvm_backup.tar.gz -C $$HOME .nvm; \
+	fi
+	@echo "$(GREEN)✓ Backup created$(NC)"
+
+restore-env:
+	@if [ -f "$(BACKUP_DIR)/pyenv_backup.tar.gz" ]; then \
+		echo "$(BLUE)Restoring pyenv...$(NC)"; \
+		tar xzf $(BACKUP_DIR)/pyenv_backup.tar.gz -C $$HOME; \
+	fi
+	@if [ -f "$(BACKUP_DIR)/nvm_backup.tar.gz" ]; then \
+		echo "$(BLUE)Restoring nvm...$(NC)"; \
+		tar xzf $(BACKUP_DIR)/nvm_backup.tar.gz -C $$HOME; \
+	fi
+	@echo "$(GREEN)✓ Environment restored$(NC)"
+
+phase1: check-os check-permissions backup-env
+	@echo "$(BLUE)Phase 1: Installing system requirements...$(NC)"
+	@echo "$(BLUE)Checking Python installation...$(NC)"
+	@if ! command -v python3 >/dev/null 2>&1; then \
+		echo "$(YELLOW)Python not found. Installing...$(NC)"; \
+		if [ "$(UNAME_S)" = "Darwin" ]; then \
+			brew install python@3.10 || ($(MAKE) restore-env && exit 1); \
+		else \
+			sudo apt-get update && sudo apt-get install -y python3.10 || ($(MAKE) restore-env && exit 1); \
+		fi; \
+	fi
+	@echo "$(BLUE)Checking Node.js installation...$(NC)"
+	@if ! command -v node >/dev/null 2>&1; then \
+		echo "$(YELLOW)Node.js not found. Installing...$(NC)"; \
+		if [ "$(UNAME_S)" = "Darwin" ]; then \
+			brew install node@18 || ($(MAKE) restore-env && exit 1); \
+		else \
+			curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash - && \
+			sudo apt-get install -y nodejs || ($(MAKE) restore-env && exit 1); \
+		fi; \
+	fi
+	@echo "$(BLUE)Installing version managers...$(NC)"
+	@if ! command -v pyenv >/dev/null 2>&1; then \
+		if [ "$(UNAME_S)" = "Darwin" ]; then \
+			brew install pyenv || ($(MAKE) restore-env && exit 1); \
+		else \
+			curl https://pyenv.run | bash || ($(MAKE) restore-env && exit 1); \
+		fi; \
+	fi
+	@if [ ! -d "$$HOME/.nvm" ]; then \
+		curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v$(NVM_VERSION)/install.sh | bash || ($(MAKE) restore-env && exit 1); \
+	fi
+	@echo "$(GREEN)✓ Phase 1 complete!$(NC)"
+	@echo "$(YELLOW)Please restart your terminal and run: make phase2$(NC)"
+
+phase2: verify-versions
+	@echo "$(BLUE)Phase 2: Installing MCP servers...$(NC)"
+	@echo "$(BLUE)Setting up Node.js environment...$(NC)"
+	@. "$$HOME/.nvm/nvm.sh" && nvm install 18 && nvm use 18 || exit 1
+	@npm install -g uv@$(UV_VERSION) || exit 1
+	@echo "$(BLUE)Setting up Python environment...$(NC)"
+	@eval "$$(pyenv init -)" && \
+		pyenv install -s $(PYTHON_VERSION) && \
+		pyenv global $(PYTHON_VERSION) || exit 1
+	@$(MAKE) install-git
+	@$(MAKE) install-brave
+	@$(MAKE) install-github
+	@$(MAKE) install-memory
+	@$(MAKE) install-sequential
+	@$(MAKE) verify-installation
+	@$(MAKE) print-instructions
+
+verify-installation:
+	@echo "$(BLUE)Verifying installations...$(NC)"
+	@cd "$(SERVERS_DIR)/git" && . .venv/bin/activate && python -c "import mcp_server_git" || echo "$(RED)Git MCP verification failed$(NC)"
+	@cd "$(SERVERS_DIR)/brave-search" && node -e "require('@modelcontextprotocol/server-brave-search')" || echo "$(RED)Brave Search MCP verification failed$(NC)"
+	@cd "$(SERVERS_DIR)/github" && node -e "require('@modelcontextprotocol/server-github')" || echo "$(RED)GitHub MCP verification failed$(NC)"
+	@cd "$(SERVERS_DIR)/memory" && node -e "require('@modelcontextprotocol/server-memory')" || echo "$(RED)Memory MCP verification failed$(NC)"
+	@cd "$(SERVERS_DIR)/sequentialthinking" && node -e "require('@modelcontextprotocol/server-sequential-thinking')" || echo "$(RED)Sequential Thinking MCP verification failed$(NC)"
+	@echo "$(GREEN)✓ Installation verification complete$(NC)"
+
+update-all: update-git update-brave update-github update-memory update-sequential
+
+update-git:
+	@echo "$(BLUE)Updating Git MCP...$(NC)"
+	@cd "$(SERVERS_DIR)/git" && . .venv/bin/activate && uv pip install --upgrade -e .
+
+update-brave:
+	@echo "$(BLUE)Updating Brave Search MCP...$(NC)"
+	@cd "$(SERVERS_DIR)/brave-search" && npm update
+
+update-github:
+	@echo "$(BLUE)Updating GitHub MCP...$(NC)"
+	@cd "$(SERVERS_DIR)/github" && npm update
+
+update-memory:
+	@echo "$(BLUE)Updating Memory MCP...$(NC)"
+	@cd "$(SERVERS_DIR)/memory" && npm update
+
+update-sequential:
+	@echo "$(BLUE)Updating Sequential Thinking MCP...$(NC)"
+	@cd "$(SERVERS_DIR)/sequentialthinking" && npm update
+
+install-git:
+	@echo "$(BLUE)Installing Git MCP...$(NC)"
+	@cd "$(SERVERS_DIR)/git" && \
+	uv venv && \
+	. .venv/bin/activate && \
+	uv pip install -e . || exit 1
+	@echo "$(GREEN)✓ Git MCP installed$(NC)"
+
+install-brave:
+	@echo "$(BLUE)Installing Brave Search MCP...$(NC)"
+	@cd "$(SERVERS_DIR)/brave-search" && npm install
+	@echo "$(GREEN)✓ Brave Search MCP installed$(NC)"
+
+install-github:
+	@echo "$(BLUE)Installing GitHub MCP...$(NC)"
+	@cd "$(SERVERS_DIR)/github" && npm install
+	@echo "$(GREEN)✓ GitHub MCP installed$(NC)"
+
+install-memory:
+	@echo "$(BLUE)Installing Memory MCP...$(NC)"
+	@cd "$(SERVERS_DIR)/memory" && npm install
+	@echo "$(GREEN)✓ Memory MCP installed$(NC)"
+
+install-sequential:
+	@echo "$(BLUE)Installing Sequential Thinking MCP...$(NC)"
+	@cd "$(SERVERS_DIR)/sequentialthinking" && npm install
+	@echo "$(GREEN)✓ Sequential Thinking MCP installed$(NC)"
+
+print-instructions:
+	@echo "\n$(YELLOW)=== IMPORTANT: API Keys Required ===$(NC)"
+	@echo "$(RED)1. Brave Search API Key Required:$(NC)"
+	@echo "   - Get your API key from: https://brave.com/search/api/"
+	@echo "   - Set it in your environment: export BRAVE_API_KEY=your_key_here"
+	@echo "\n$(RED)2. GitHub Personal Access Token Required:$(NC)"
+	@echo "   - Generate a token at: https://github.com/settings/tokens"
+	@echo "   - Required scopes: repo, workflow (optional)"
+	@echo "   - Set it in your environment: export GITHUB_PERSONAL_ACCESS_TOKEN=your_token_here"
+	@echo "\n$(YELLOW)=== Cursor MCP Configuration Required ===$(NC)"
+	@echo "Configure the following MCPs in Cursor (Settings > Features > MCP):"
+	@echo "\n1. Git MCP:"
+	@echo "   Name: Git"
+	@echo "   Type: stdio"
+	@echo "   Command: uvx mcp-server-git --repository /path/to/your/repo"
+	@echo "\n2. Brave Search MCP:"
+	@echo "   Name: Brave Search"
+	@echo "   Type: stdio"
+	@echo "   Command: npx -y @modelcontextprotocol/server-brave-search"
+	@echo "\n3. GitHub MCP:"
+	@echo "   Name: GitHub"
+	@echo "   Type: stdio"
+	@echo "   Command: npx -y @modelcontextprotocol/server-github"
+	@echo "\n4. Memory MCP:"
+	@echo "   Name: Memory"
+	@echo "   Type: stdio"
+	@echo "   Command: npx -y @modelcontextprotocol/server-memory"
+	@echo "\n5. Sequential Thinking MCP:"
+	@echo "   Name: Sequential Thinking"
+	@echo "   Type: stdio"
+	@echo "   Command: npx -y @modelcontextprotocol/server-sequential-thinking"
+	@echo "\n$(GREEN)✓ Installation complete! Don't forget to configure your MCPs in Cursor and set up your API keys.$(NC)"
+	@echo "\n$(YELLOW)Note: You may need to restart your terminal for all changes to take effect.$(NC)"
+
+clean:
+	@echo "$(BLUE)Cleaning up...$(NC)"
+	@find . -type d -name "node_modules" -exec rm -rf {} +
+	@find . -type d -name "dist" -exec rm -rf {} +
+	@find . -type d -name ".venv" -exec rm -rf {} +
+	@find . -type d -name "__pycache__" -exec rm -rf {} +
+	@find . -type f -name "*.pyc" -delete
+	@npm cache clean --force
+	@echo "$(GREEN)✓ Cleanup complete$(NC)"
+
+clean-deep: clean
+	@echo "$(BLUE)Performing deep cleanup...$(NC)"
+	@if [ "$(UNAME_S)" = "Darwin" ]; then \
+		brew uninstall --force node@18 python@3.10 pyenv 2>/dev/null || true; \
+	else \
+		sudo apt-get remove -y nodejs python3.10 2>/dev/null || true; \
+	fi
+	@rm -rf $$HOME/.nvm $$HOME/.pyenv 2>/dev/null || true
+	@rm -rf $(BACKUP_DIR)
+	@echo "$(GREEN)✓ Deep cleanup complete$(NC)" 
