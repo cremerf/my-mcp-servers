@@ -11,7 +11,7 @@ NC := \033[0m # No Color
 UNAME_S := $(shell uname -s)
 
 # Required versions
-NODE_VERSION := 18.0.0
+NODE_VERSION := 22.13.1
 PYTHON_VERSION := 3.10.0
 PYENV_VERSION := 2.3.35
 NVM_VERSION := 0.39.0
@@ -47,7 +47,7 @@ verify-versions:
 		echo "$(RED)Error: Python 3.10+ required$(NC)"; \
 		exit 1; \
 	fi
-	@if ! node -v | grep -q "v18" 2>/dev/null; then \
+	@if ! node -e "process.exit(process.version.match(/^v(\d+)/)[1] >= 18 ? 0 : 1)" 2>/dev/null; then \
 		echo "$(RED)Error: Node.js 18+ required$(NC)"; \
 		exit 1; \
 	fi
@@ -120,10 +120,22 @@ phase1: check-os check-permissions backup-env
 	@if ! command -v node >/dev/null 2>&1; then \
 		echo "$(YELLOW)Node.js not found. Installing...$(NC)"; \
 		if [ "$(UNAME_S)" = "Darwin" ]; then \
-			brew install node@18 || ($(MAKE) restore-env && exit 1); \
+			brew install node@22 || ($(MAKE) restore-env && exit 1); \
 		else \
-			curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash - && \
+			curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && \
 			sudo apt-get install -y nodejs || ($(MAKE) restore-env && exit 1); \
+		fi; \
+	else \
+		if node -e "process.exit(process.version.match(/^v(\d+)/)[1] >= 18 ? 0 : 1)" 2>/dev/null; then \
+			echo "$(GREEN)✓ Compatible Node.js version found$(NC)"; \
+		else \
+			echo "$(YELLOW)Installing Node.js $(NODE_VERSION)...$(NC)"; \
+			if [ "$(UNAME_S)" = "Darwin" ]; then \
+				brew install node@22 || ($(MAKE) restore-env && exit 1); \
+			else \
+				curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && \
+				sudo apt-get install -y nodejs || ($(MAKE) restore-env && exit 1); \
+			fi; \
 		fi; \
 	fi
 	@echo "$(BLUE)Installing version managers...$(NC)"

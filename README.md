@@ -12,7 +12,7 @@ Before installation, ensure you have:
 
 2. **System Requirements**
    - Python 3.10 or higher
-   - Node.js 18 LTS or higher
+   - Node.js 18 or higher (default installation: Node.js 22.13.1)
    - Write permissions in the installation directory
 
 ## Installation
