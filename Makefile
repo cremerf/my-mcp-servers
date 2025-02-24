@@ -46,8 +46,12 @@ check-permissions:
 
 verify-versions:
 	@echo "$(BLUE)Verifying installed versions...$(NC)"
-	@if ! python3 -c "import sys; exit(0 if sys.version_info >= (3,10) else 1)" 2>/dev/null; then \
-		echo "$(RED)Error: Python 3.10+ required$(NC)"; \
+	@if [ -z "$(PYTHON_CMD)" ]; then \
+		echo "$(RED)Error: Python command not found. Please ensure Python 3.10+ is installed and accessible.$(NC)"; \
+		exit 1; \
+	fi
+	@if ! $(PYTHON_CMD) -c "import sys; exit(0 if sys.version_info >= (3,10) else 1)" 2>/dev/null; then \
+		echo "$(RED)Error: Python 3.10+ required. Current version: $$($(PYTHON_CMD) --version)$(NC)"; \
 		exit 1; \
 	fi
 	@if ! node -e "process.exit(process.version.match(/^v(\d+)/)[1] >= 18 ? 0 : 1)" 2>/dev/null; then \
