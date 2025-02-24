@@ -50,7 +50,7 @@ verify-versions:
 		echo "$(RED)Error: Python command not found. Please ensure Python 3.10+ is installed and accessible.$(NC)"; \
 		exit 1; \
 	fi
-	@if ! $(PYTHON_CMD) -c "import sys; exit(0 if sys.version_info >= (3,10) else 1)" 2>/dev/null; then \
+	@if ! $(PYTHON_CMD) -c "import sys; exit(0 if sys.version_info >= (3, 10) else 1)" 2>/dev/null; then \
 		echo "$(RED)Error: Python 3.10+ required. Current version: $$($(PYTHON_CMD) --version)$(NC)"; \
 		exit 1; \
 	fi
