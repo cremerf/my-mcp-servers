@@ -11,7 +11,7 @@ NC := \033[0m # No Color
 UNAME_S := $(shell uname -s)
 
 # Required versions
-NODE_VERSION := 22.13.1
+NODE_VERSION := 22
 PYTHON_VERSION := 3.10.0
 PYENV_VERSION := 2.3.35
 NVM_VERSION := 0.39.0
@@ -23,7 +23,7 @@ SERVERS_DIR := $(REPO_ROOT)/servers/src
 BACKUP_DIR := $(REPO_ROOT)/.backup
 
 # Python command detection
-PYTHON_CMD := $(shell which python3 2>/dev/null || which python 2>/dev/null)
+PYTHON_CMD := python3
 
 all:
 	@echo "$(YELLOW)This installation requires two phases:$(NC)"
@@ -46,18 +46,20 @@ check-permissions:
 
 verify-versions:
 	@echo "$(BLUE)Verifying installed versions...$(NC)"
-	@if [ -z "$(PYTHON_CMD)" ]; then \
+	@if ! command -v $(PYTHON_CMD) >/dev/null 2>&1; then \
 		echo "$(RED)Error: Python command not found. Please ensure Python 3.10+ is installed and accessible.$(NC)"; \
 		exit 1; \
 	fi
-	@echo "Debug: Python version: $$($(PYTHON_CMD) --version)"
-	@if ! $(PYTHON_CMD) -c "import sys; print(f'Debug: Python version info: {sys.version_info[:2]}'); exit(0 if sys.version_info[:2] >= (3,10) else 1)" 2>/dev/null; then \
-		echo "$(RED)Error: Python 3.10+ required. Current version: $(shell $(PYTHON_CMD) --version)$(NC)"; \
+	@echo "Debug: Using Python command: $$(which $(PYTHON_CMD))"
+	@PYTHON_VERSION_CHECK=$$(/usr/bin/env -i HOME=$$HOME PATH=/usr/bin:/bin $(PYTHON_CMD) -c "import sys; print('yes' if sys.version_info[:2] >= (3,10) else 'no')" 2>/dev/null) && \
+	if [ "$$PYTHON_VERSION_CHECK" = "yes" ]; then \
+		echo "$(GREEN)✓ Python version check passed: $$($(PYTHON_CMD) --version)$(NC)"; \
+	else \
+		echo "$(RED)Error: Python 3.10+ required. Current version: $$($(PYTHON_CMD) --version)$(NC)"; \
 		exit 1; \
 	fi
-	@echo "$(GREEN)✓ Python version check passed$(NC)"
-	@if ! node -e "process.exit(process.version.match(/^v(\d+)/)[1] >= 18 ? 0 : 1)" 2>/dev/null; then \
-		echo "$(RED)Error: Node.js 18+ required$(NC)"; \
+	@if ! node -e "process.exit(process.version.match(/^v(\d+)/)[1] >= 22 ? 0 : 1)" 2>/dev/null; then \
+		echo "$(RED)Error: Node.js 22+ required$(NC)"; \
 		exit 1; \
 	fi
 	@if command -v pyenv >/dev/null 2>&1; then \
@@ -123,13 +125,20 @@ phase1: check-os check-permissions backup-env
 			brew install python@3.10 || ($(MAKE) restore-env && exit 1); \
 		else \
 			sudo apt-get update && \
-			sudo apt-get install -y python3.10 python-is-python3 || ($(MAKE) restore-env && exit 1); \
+			sudo apt-get install -y python3.10 python3-pip python-is-python3 || ($(MAKE) restore-env && exit 1); \
 		fi; \
 	else \
-		if [ "$(UNAME_S)" = "Linux" ] && ! command -v python >/dev/null 2>&1; then \
-			echo "$(YELLOW)Installing python-is-python3 package...$(NC)"; \
-			sudo apt-get update && \
-			sudo apt-get install -y python-is-python3 || ($(MAKE) restore-env && exit 1); \
+		if [ "$(UNAME_S)" = "Linux" ]; then \
+			if ! command -v python >/dev/null 2>&1; then \
+				echo "$(YELLOW)Installing python-is-python3 package...$(NC)"; \
+				sudo apt-get update && \
+				sudo apt-get install -y python-is-python3 || ($(MAKE) restore-env && exit 1); \
+			fi; \
+			if ! command -v pip3 >/dev/null 2>&1; then \
+				echo "$(YELLOW)Installing pip...$(NC)"; \
+				sudo apt-get update && \
+				sudo apt-get install -y python3-pip || ($(MAKE) restore-env && exit 1); \
+			fi; \
 		fi; \
 	fi
 	@echo "$(BLUE)Checking Node.js installation...$(NC)"
@@ -142,7 +151,7 @@ phase1: check-os check-permissions backup-env
 			sudo apt-get install -y nodejs || ($(MAKE) restore-env && exit 1); \
 		fi; \
 	else \
-		if node -e "process.exit(process.version.match(/^v(\d+)/)[1] >= 18 ? 0 : 1)" 2>/dev/null; then \
+		if node -e "process.exit(process.version.match(/^v(\d+)/)[1] >= 22 ? 0 : 1)" 2>/dev/null; then \
 			echo "$(GREEN)✓ Compatible Node.js version found$(NC)"; \
 		else \
 			echo "$(YELLOW)Installing Node.js $(NODE_VERSION)...$(NC)"; \
@@ -155,7 +164,9 @@ phase1: check-os check-permissions backup-env
 		fi; \
 	fi
 	@echo "$(BLUE)Installing version managers...$(NC)"
-	@if ! command -v pyenv >/dev/null 2>&1; then \
+	@if [ -d "$$HOME/.pyenv" ]; then \
+		echo "$(YELLOW)pyenv already installed, skipping...$(NC)"; \
+	else \
 		if [ "$(UNAME_S)" = "Darwin" ]; then \
 			brew install pyenv || ($(MAKE) restore-env && exit 1); \
 		else \
@@ -171,15 +182,28 @@ phase1: check-os check-permissions backup-env
 phase2: verify-versions
 	@echo "$(BLUE)Phase 2: Installing MCP servers...$(NC)"
 	@echo "$(BLUE)Setting up Node.js environment...$(NC)"
-	@. "$$HOME/.nvm/nvm.sh" && nvm install 18 && nvm use 18 || exit 1
+	@if [ ! -f "$$HOME/.nvm/nvm.sh" ]; then \
+		echo "$(RED)Error: nvm is not installed. Please run 'make phase1' first.$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(BLUE)Loading nvm...$(NC)"
+	@if ! node -e "process.exit(process.version.match(/^v(\d+)/)[1] >= 22 ? 0 : 1)" 2>/dev/null; then \
+		bash -c 'source $$HOME/.nvm/nvm.sh && nvm install 22 && nvm use 22' || exit 1; \
+	else \
+		echo "$(GREEN)✓ Node.js 22+ already installed$(NC)"; \
+	fi
 	@if ! command -v uv >/dev/null 2>&1; then \
 		echo "$(YELLOW)Installing uv package manager...$(NC)"; \
-		$(PYTHON_CMD) -m pip install uv==$(UV_VERSION) || exit 1; \
+		/usr/bin/env -i HOME=$$HOME PATH=/usr/bin:/bin $(PYTHON_CMD) -m pip install uv==$(UV_VERSION) || exit 1; \
 	fi
 	@echo "$(BLUE)Setting up Python environment...$(NC)"
-	@eval "$$(pyenv init -)" && \
-		pyenv install -s $(PYTHON_VERSION) && \
-		pyenv global $(PYTHON_VERSION) || exit 1
+	@PYTHON_VERSION_CHECK=$$(/usr/bin/env -i HOME=$$HOME PATH=/usr/bin:/bin $(PYTHON_CMD) -c "import sys; print('yes' if sys.version_info[:2] >= (3,10) else 'no')" 2>/dev/null) && \
+	if [ "$$PYTHON_VERSION_CHECK" = "yes" ]; then \
+		echo "$(GREEN)✓ Using system Python $$($(PYTHON_CMD) --version)$(NC)"; \
+	else \
+		echo "$(RED)Error: Python 3.10+ is required but not found$(NC)"; \
+		exit 1; \
+	fi
 	@$(MAKE) install-git
 	@$(MAKE) install-brave
 	@$(MAKE) install-github
@@ -190,7 +214,14 @@ phase2: verify-versions
 
 verify-installation:
 	@echo "$(BLUE)Verifying installations...$(NC)"
-	@cd "$(SERVERS_DIR)/git" && . .venv/bin/activate && python -c "import mcp_server_git" || echo "$(RED)Git MCP verification failed$(NC)"
+	@cd "$(SERVERS_DIR)/git" && \
+		/usr/bin/env -i \
+		HOME=$$HOME \
+		PATH=/usr/bin:/bin:$$HOME/.local/bin \
+		PYTHONPATH="" \
+		PYTHONHOME="" \
+		. .venv/bin/activate && \
+		/usr/bin/python3 -c "import mcp_server_git" || echo "$(RED)Git MCP verification failed$(NC)"
 	@cd "$(SERVERS_DIR)/brave-search" && node -e "require('@modelcontextprotocol/server-brave-search')" || echo "$(RED)Brave Search MCP verification failed$(NC)"
 	@cd "$(SERVERS_DIR)/github" && node -e "require('@modelcontextprotocol/server-github')" || echo "$(RED)GitHub MCP verification failed$(NC)"
 	@cd "$(SERVERS_DIR)/memory" && node -e "require('@modelcontextprotocol/server-memory')" || echo "$(RED)Memory MCP verification failed$(NC)"
@@ -222,9 +253,27 @@ update-sequential:
 install-git:
 	@echo "$(BLUE)Installing Git MCP...$(NC)"
 	@cd "$(SERVERS_DIR)/git" && \
-	uv venv && \
-	. .venv/bin/activate && \
-	uv pip install -e . || exit 1
+	PYTHON_VERSION_CHECK=$$(/usr/bin/env -i HOME=$$HOME PATH=/usr/bin:/bin $(PYTHON_CMD) -c "import sys; print('yes' if sys.version_info[:2] >= (3,10) else 'no')" 2>/dev/null) && \
+	if [ "$$PYTHON_VERSION_CHECK" = "yes" ]; then \
+		echo "$(GREEN)Using system Python for Git MCP installation$(NC)" && \
+		/usr/bin/env -i \
+		HOME=$$HOME \
+		PATH=/usr/bin:/bin:$$HOME/.local/bin \
+		PYTHONPATH="" \
+		PYTHONHOME="" \
+		/usr/bin/python3 -m venv .venv && \
+		. .venv/bin/activate && \
+		/usr/bin/env -i \
+		HOME=$$HOME \
+		PATH=/usr/bin:/bin:$$HOME/.local/bin \
+		PYTHONPATH="" \
+		PYTHONHOME="" \
+		pip install uv==$(UV_VERSION) && \
+		uv pip install -e . || exit 1; \
+	else \
+		echo "$(RED)Error: Python 3.10+ is required but not found$(NC)"; \
+		exit 1; \
+	fi
 	@echo "$(GREEN)✓ Git MCP installed$(NC)"
 
 install-brave:
