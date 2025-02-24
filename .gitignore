@@ -302,4 +302,8 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
+.venv
+run_python.sh
+start_mcp.sh
 
+.backup
