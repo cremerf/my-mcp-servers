@@ -50,10 +50,12 @@ verify-versions:
 		echo "$(RED)Error: Python command not found. Please ensure Python 3.10+ is installed and accessible.$(NC)"; \
 		exit 1; \
 	fi
-	@if ! $(PYTHON_CMD) -c "import sys; exit(0 if sys.version_info >= (3, 10) else 1)" 2>/dev/null; then \
-		echo "$(RED)Error: Python 3.10+ required. Current version: $$($(PYTHON_CMD) --version)$(NC)"; \
+	@echo "Debug: Python version: $$($(PYTHON_CMD) --version)"
+	@if ! $(PYTHON_CMD) -c "import sys; print(f'Debug: Python version info: {sys.version_info[:2]}'); exit(0 if sys.version_info[:2] >= (3,10) else 1)" 2>/dev/null; then \
+		echo "$(RED)Error: Python 3.10+ required. Current version: $(shell $(PYTHON_CMD) --version)$(NC)"; \
 		exit 1; \
 	fi
+	@echo "$(GREEN)✓ Python version check passed$(NC)"
 	@if ! node -e "process.exit(process.version.match(/^v(\d+)/)[1] >= 18 ? 0 : 1)" 2>/dev/null; then \
 		echo "$(RED)Error: Node.js 18+ required$(NC)"; \
 		exit 1; \
@@ -298,4 +300,4 @@ clean-deep: clean
 	fi
 	@rm -rf $$HOME/.nvm $$HOME/.pyenv 2>/dev/null || true
 	@rm -rf $(BACKUP_DIR)
-	@echo "$(GREEN)✓ Deep cleanup complete$(NC)" 
+	@echo "$(GREEN)✓ Deep cleanup complete$(NC)"
