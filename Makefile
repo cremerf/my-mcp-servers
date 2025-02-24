@@ -22,6 +22,9 @@ REPO_ROOT := $(shell pwd)
 SERVERS_DIR := $(REPO_ROOT)/servers/src
 BACKUP_DIR := $(REPO_ROOT)/.backup
 
+# Python command detection
+PYTHON_CMD := $(shell which python3 2>/dev/null || which python 2>/dev/null)
+
 all:
 	@echo "$(YELLOW)This installation requires two phases:$(NC)"
 	@echo "1. First run: $(GREEN)make phase1$(NC)"
@@ -113,7 +116,14 @@ phase1: check-os check-permissions backup-env
 		if [ "$(UNAME_S)" = "Darwin" ]; then \
 			brew install python@3.10 || ($(MAKE) restore-env && exit 1); \
 		else \
-			sudo apt-get update && sudo apt-get install -y python3.10 || ($(MAKE) restore-env && exit 1); \
+			sudo apt-get update && \
+			sudo apt-get install -y python3.10 python-is-python3 || ($(MAKE) restore-env && exit 1); \
+		fi; \
+	else \
+		if [ "$(UNAME_S)" = "Linux" ] && ! command -v python >/dev/null 2>&1; then \
+			echo "$(YELLOW)Installing python-is-python3 package...$(NC)"; \
+			sudo apt-get update && \
+			sudo apt-get install -y python-is-python3 || ($(MAKE) restore-env && exit 1); \
 		fi; \
 	fi
 	@echo "$(BLUE)Checking Node.js installation...$(NC)"
@@ -156,7 +166,10 @@ phase2: verify-versions
 	@echo "$(BLUE)Phase 2: Installing MCP servers...$(NC)"
 	@echo "$(BLUE)Setting up Node.js environment...$(NC)"
 	@. "$$HOME/.nvm/nvm.sh" && nvm install 18 && nvm use 18 || exit 1
-	@npm install -g uv@$(UV_VERSION) || exit 1
+	@if ! command -v uv >/dev/null 2>&1; then \
+		echo "$(YELLOW)Installing uv package manager...$(NC)"; \
+		$(PYTHON_CMD) -m pip install uv==$(UV_VERSION) || exit 1; \
+	fi
 	@echo "$(BLUE)Setting up Python environment...$(NC)"
 	@eval "$$(pyenv init -)" && \
 		pyenv install -s $(PYTHON_VERSION) && \
