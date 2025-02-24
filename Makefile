@@ -50,8 +50,8 @@ verify-versions:
 		echo "$(RED)Error: Python command not found. Please ensure Python 3.10+ is installed and accessible.$(NC)"; \
 		exit 1; \
 	fi
-	@if ! $(PYTHON_CMD) -c "import sys; exit(0 if sys.version_info >= (3,10) else 1)" 2>/dev/null; then \
-		echo "$(RED)Error: Python 3.10+ required. Current version: $$($(PYTHON_CMD) --version)$(NC)"; \
+	@if ! $(PYTHON_CMD) -c "import sys; sys.exit(0) if sys.version_info[:2] >= (3,10) else sys.exit(1)" 2>/dev/null; then \
+		echo "$(RED)Error: Python 3.10+ required. Current version: $(shell $(PYTHON_CMD) --version)$(NC)"; \
 		exit 1; \
 	fi
 	@if ! node -e "process.exit(process.version.match(/^v(\d+)/)[1] >= 18 ? 0 : 1)" 2>/dev/null; then \
@@ -298,4 +298,4 @@ clean-deep: clean
 	fi
 	@rm -rf $$HOME/.nvm $$HOME/.pyenv 2>/dev/null || true
 	@rm -rf $(BACKUP_DIR)
-	@echo "$(GREEN)✓ Deep cleanup complete$(NC)" 
+	@echo "$(GREEN)✓ Deep cleanup complete$(NC)"
